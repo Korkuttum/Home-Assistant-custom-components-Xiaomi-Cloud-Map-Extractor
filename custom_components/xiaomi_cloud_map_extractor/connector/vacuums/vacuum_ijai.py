@@ -87,6 +87,7 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
 
         for piid in piids:
             data = self._miot_device.get_property_by(1, piid)
+            _LOGGER.debug("DEBUG_DUMP wifi_sn candidate piid=%s raw=%r", piid, data[0].get("value"))
             if (
                 "value" in data[0]
                 and len(data[0]["value"]) in self.WIFI_INFO_SN_POSSIBLE_LEN
@@ -98,6 +99,7 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
         if not wifi_info_sn:
             # property 7, 45 (sweep -> multi-prop-vacuum) on all miot vacuums
             got_from_vacuum = self._miot_device.get_property_by(7, 45)
+            _LOGGER.debug("DEBUG_DUMP wifi_sn fallback raw=%r", got_from_vacuum[0].get("value"))
 
             for prop in got_from_vacuum[0]["value"].split(','):
                 cleaned_prop = str(prop).replace('"', '')
@@ -109,7 +111,9 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
                         len(cleaned_prop) in self.WIFI_INFO_SN_POSSIBLE_LEN
                         and cleaned_prop.isalnum()
                         and cleaned_prop.isupper()):
+                    _LOGGER.debug("DEBUG_DUMP wifi_sn fallback match candidate=%r", cleaned_prop)
                     wifi_info_sn = cleaned_prop
+        _LOGGER.debug("DEBUG_DUMP wifi_sn resolved=%r", wifi_info_sn)
         return wifi_info_sn
 
     def decode_and_parse(self, raw_map: bytes) -> MapData:
