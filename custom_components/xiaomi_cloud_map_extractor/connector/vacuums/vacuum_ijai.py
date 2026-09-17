@@ -17,7 +17,7 @@ OFF_UPDATES = 3
 
 
 class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
-    WIFI_INFO_SN_POSSIBLE_LEN = [18, 20]
+    WIFI_INFO_SN_POSSIBLE_LEN = [18, 19, 20]
 
     def __init__(self, vacuum_config: VacuumConfig):
         super().__init__(vacuum_config)
@@ -71,7 +71,12 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
         return self._ijai_map_data_parser
 
     async def get_map_url(self, map_name: str) -> str | None:
-        return await self.get_fallback_map_url(map_name)
+        url = await self.get_fallback_map_url(map_name)
+        if url is not None:
+            return url
+        # Some Ijai models (e.g. ijai.vacuum.v1, ijai.vacuum.v3) don't serve
+        # maps through get_interim_file_url_pro; fall back to the standard endpoint.
+        return await super().get_map_url(map_name)
 
     def get_wifi_info_sn(self):
         wifi_info_sn = None
