@@ -19,7 +19,7 @@
     "vacuum-map-parser-viomi==0.1.3",
     "vacuum-map-parser-roidmi==0.1.3",
     "vacuum-map-parser-dreame==0.1.3",
-    "vacuum-map-parser-ijai @ git+https://github.com/Korkuttum/Python-package-vacuum-map-parser-ijai.git@c258f17b4eb7ec97ac2a2005ecda1feeb5635d01",
+    "vacuum-map-parser-ijai @ git+https://github.com/Korkuttum/Python-package-vacuum-map-parser-ijai.git@242118b5377fb41cc4c1d7e6f48e3a7f40eeee69",
     "vacuum-map-parser-xiaomi==0.1.3"
   ],
   "version": "v3.0.0-beta"
