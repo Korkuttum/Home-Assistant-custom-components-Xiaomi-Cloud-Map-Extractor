@@ -11,6 +11,7 @@ from vacuum_map_parser_ijai.aes_decryptor import gen_md5_key
 from .base.vacuum_v2 import BaseXiaomiCloudVacuumV2
 from .base.model import VacuumConfig, VacuumApi
 from ..utils.exceptions import FailedConnectionException
+from ..utils.dict_operations import path_extractor
 
 _LOGGER = logging.getLogger(__name__)
 OFF_UPDATES = 3
@@ -78,6 +79,61 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
         # maps through get_interim_file_url_pro; fall back to the standard endpoint.
         return await super().get_map_url(map_name)
 
+    async def get_raw_map_data(self, map_name: str | None) -> bytes | None:
+        if self._wifi_info_sn is None or self._wifi_info_sn == "":
+            self._wifi_info_sn = await self._resolve_wifi_info_sn()
+        return await super().get_raw_map_data(map_name)
+
+    async def _resolve_wifi_info_sn(self) -> str | None:
+        # Local MiIO lookup requires the vacuum to be reachable on the same
+        # network as Home Assistant. When it isn't (e.g. vacuum at a
+        # different physical location), fall back to reading the same
+        # properties through the Xiaomi cloud RPC relay instead.
+        try:
+            wifi_info_sn = self.get_wifi_info_sn()
+            if wifi_info_sn:
+                return wifi_info_sn
+            _LOGGER.debug("Local wifi_sn lookup returned nothing, trying cloud")
+        except Exception as ex:
+            _LOGGER.debug("Local wifi_sn lookup failed (%r), trying cloud", ex)
+        return await self._get_wifi_info_sn_cloud()
+
+    async def _get_wifi_info_sn_cloud(self) -> str | None:
+        piids = [3, 5]
+        for piid in piids:
+            value = await self._get_cloud_property(1, piid)
+            _LOGGER.debug("DEBUG_DUMP wifi_sn cloud candidate piid=%s raw=%r", piid, value)
+            if (
+                value is not None
+                and len(str(value)) in self.WIFI_INFO_SN_POSSIBLE_LEN
+                and str(value).isupper()
+            ):
+                return str(value)
+
+        value = await self._get_cloud_property(7, 45)
+        _LOGGER.debug("DEBUG_DUMP wifi_sn cloud fallback raw=%r", value)
+        if value:
+            for prop in str(value).split(','):
+                cleaned_prop = str(prop).replace('"', '')
+
+                if str(self._user_id) in cleaned_prop:
+                    cleaned_prop = cleaned_prop.split(';')[0]
+
+                if (
+                        len(cleaned_prop) in self.WIFI_INFO_SN_POSSIBLE_LEN
+                        and cleaned_prop.isalnum()
+                        and cleaned_prop.isupper()):
+                    _LOGGER.debug("DEBUG_DUMP wifi_sn cloud fallback match candidate=%r", cleaned_prop)
+                    return cleaned_prop
+        return None
+
+    async def _get_cloud_property(self, siid: int, piid: int) -> Any:
+        response = await self._connector.get_other_info(
+            self._device_id, "get_properties",
+            parameters=[{"did": self._device_id, "siid": siid, "piid": piid}],
+        )
+        return path_extractor(response, "result.0.value")
+
     def get_wifi_info_sn(self):
         wifi_info_sn = None
 
@@ -117,17 +173,9 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
         return wifi_info_sn
 
     def decode_and_parse(self, raw_map: bytes) -> MapData:
-        GET_PROP_RETRIES = 5
-        if self._wifi_info_sn is None or self._wifi_info_sn == "":
-            _LOGGER.debug(f"host={self._host}, token={self._token}")
-            for _ in range(GET_PROP_RETRIES):
-                try:
-                    self._wifi_info_sn = self.get_wifi_info_sn()
-                    _LOGGER.debug(f"Got wifi_sn {self._wifi_info_sn}")
-                    break
-                except Exception as ex:
-                    _LOGGER.error("Failed to get wifi_sn from vacuum")
-                    raise FailedConnectionException(ex)
+        if not self._wifi_info_sn:
+            _LOGGER.error("Failed to get wifi_sn from vacuum (local and cloud)")
+            raise FailedConnectionException(Exception("wifi_sn could not be resolved"))
 
         decoded_map = self.map_data_parser.unpack_map(
             raw_map,
