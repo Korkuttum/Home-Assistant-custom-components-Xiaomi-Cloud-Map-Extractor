@@ -252,12 +252,8 @@ class IjaiCloudVacuum(BaseXiaomiCloudVacuumV2):
                 device_id=str(self._device_id),
                 model=self.model,
                 device_mac=self._mac)
-<<<<<<< HEAD
-            map_data = self.map_data_parser.parse(decoded_map)
-=======
             # The image configuration and element sizes are fitted to every map.
             map_data = create_parser(*self._render_config, decoded_map).parse(decoded_map)
->>>>>>> pr/ijai-render
             self._has_good_map = True
             return map_data
         except Exception as ex:  # pylint: disable=broad-except
